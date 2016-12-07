@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.PointF;
 import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.util.TypedValue;
@@ -32,6 +33,9 @@ public class Chart extends View {
     private float scale = DEFAULT_SCALE;
     private float maxScale = 3f;
     private float minScale = 0.5f;
+
+    private final static PointF DEFAULT_DELTA = new PointF(0f, 0f);
+    private PointF delta = new PointF(DEFAULT_DELTA.x, DEFAULT_DELTA.y);
 
     private final static float DEFAULT_BOARD_STROKE_WIDTH = 3;
     private float boardStrokeWidth = DEFAULT_BOARD_STROKE_WIDTH;
@@ -145,24 +149,30 @@ public class Chart extends View {
         }
 
         /* draw something */
+        canvas.save();
+
+        canvas.translate(delta.x, delta.y);
+
         Path visibleArea = new Path();
         visibleArea.addRect(0, 0, width, height, Path.Direction.CW);
 
         scalePath(boardBoder);
-        boardBoder.op(visibleArea, Path.Op.INTERSECT);
+//        boardBoder.op(visibleArea, Path.Op.INTERSECT);
         canvas.drawPath(boardBoder, boardStrokePaint);
 
         scalePath(boardVerticalLines);
-        boardVerticalLines.op(visibleArea, Path.Op.INTERSECT);
+//        boardVerticalLines.op(visibleArea, Path.Op.INTERSECT);
         canvas.drawPath(boardVerticalLines, boardLinePaint);
 
         scalePath(boardHorizontalLines);
-        boardHorizontalLines.op(visibleArea, Path.Op.INTERSECT);
+//        boardHorizontalLines.op(visibleArea, Path.Op.INTERSECT);
         canvas.drawPath(boardHorizontalLines, boardLinePaint);
 
         scalePath(valuePoints);
-        valuePoints.op(visibleArea, Path.Op.INTERSECT);
+//        valuePoints.op(visibleArea, Path.Op.INTERSECT);
         canvas.drawPath(valuePoints, pointPaint);
+
+        canvas.restore();
     }
 
     @Override
@@ -198,6 +208,8 @@ public class Chart extends View {
         this.state = state;
     }
 
+    private PointF downPosition = null;
+    private PointF previousDelta= null;
     private class ChartOnTouchListener implements OnTouchListener {
         @Override
         public boolean onTouch(View view, MotionEvent motionEvent) {
@@ -207,9 +219,15 @@ public class Chart extends View {
                 switch (motionEvent.getAction()) {
                     case MotionEvent.ACTION_DOWN:
                         setState(State.DRAG);
+                        downPosition = new PointF(motionEvent.getX(), motionEvent.getY());
+                        previousDelta = new PointF(delta.x, delta.y);
                         break;
 
                     case MotionEvent.ACTION_MOVE:
+                        if (state == State.DRAG) {
+                            delta.x = previousDelta.x + motionEvent.getX() - downPosition.x;
+                            delta.y = previousDelta.y + motionEvent.getY() - downPosition.y;
+                        }
                         break;
 
                     case MotionEvent.ACTION_UP:
