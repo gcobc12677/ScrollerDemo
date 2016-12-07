@@ -10,6 +10,7 @@ import android.graphics.PointF;
 import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.util.TypedValue;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
@@ -31,8 +32,8 @@ public class Chart extends View {
 
     private final static float DEFAULT_SCALE = 0.9f;
     private float scale = DEFAULT_SCALE;
-    private float maxScale = 3f;
-    private float minScale = 0.5f;
+    private float maxScale = 2f;
+    private float minScale = 0.8f;
 
     private final static PointF DEFAULT_DELTA = new PointF(0f, 0f);
     private PointF delta = new PointF(DEFAULT_DELTA.x, DEFAULT_DELTA.y);
@@ -69,8 +70,10 @@ public class Chart extends View {
     }
 
     private State state;
-    private static enum State { NONE, DRAG, ZOOM, FLING, ANIMATE_ZOOM;};
 
+    private static enum State {NONE, DRAG, ZOOM, FLING}
+
+    private GestureDetector gestureDetector = null;
     private ScaleGestureDetector scaleGestureDetector = null;
 
     private Scroller scroller = null;
@@ -85,10 +88,10 @@ public class Chart extends View {
 
     public Chart(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+        gestureDetector = new GestureDetector(context, new GestureListener());
         scaleGestureDetector = new ScaleGestureDetector(context, new ScaleListener());
         super.setOnTouchListener(new ChartOnTouchListener());
         setState(State.NONE);
-//        L.d(String.format("values size: %d", values.size()));
     }
 
     @Override
@@ -116,7 +119,7 @@ public class Chart extends View {
         boardLinePaint.setAntiAlias(true);
 
         Path boardVerticalLines = new Path();
-        for (int index = 0; index < boardVerticalLineCount; index ++) {
+        for (int index = 0; index < boardVerticalLineCount; index++) {
             boardVerticalLines.moveTo((float) width / (float) (boardVerticalLineCount + 1) * (float) (index + 1) - dpToPixel(boardLineWidth) / 2f, 0);
             boardVerticalLines.lineTo((float) width / (float) (boardVerticalLineCount + 1) * (float) (index + 1) + dpToPixel(boardLineWidth) / 2f, 0);
             boardVerticalLines.lineTo((float) width / (float) (boardVerticalLineCount + 1) * (float) (index + 1) + dpToPixel(boardLineWidth) / 2f, height);
@@ -131,17 +134,16 @@ public class Chart extends View {
 
         int minValue = Collections.min(values);
         int maxValue = Collections.max(values);
-//        L.d(String.format("min=%d max=%d", minValue, maxValue));
 
         Path boardHorizontalLines = new Path();
-        boardHorizontalLines.moveTo(0, height - ((float) height - 2f * dpToPixel(pointVerticalMargin)) / (float) (maxValue - minValue) * (float) (0- minValue) - dpToPixel(pointVerticalMargin) - dpToPixel(boardLineWidth) / 2f);
-        boardHorizontalLines.lineTo(width, height - ((float) height - 2f * dpToPixel(pointVerticalMargin)) / (float) (maxValue - minValue) * (float) (0- minValue) - dpToPixel(pointVerticalMargin) - dpToPixel(boardLineWidth) / 2f);
-        boardHorizontalLines.lineTo(width, height - ((float) height - 2f * dpToPixel(pointVerticalMargin)) / (float) (maxValue - minValue) * (float) (0- minValue) - dpToPixel(pointVerticalMargin) + dpToPixel(boardLineWidth) / 2f);
-        boardHorizontalLines.lineTo(0, height - ((float) height - 2f * dpToPixel(pointVerticalMargin)) / (float) (maxValue - minValue) * (float) (0- minValue) - dpToPixel(pointVerticalMargin) + dpToPixel(boardLineWidth) / 2f);
+        boardHorizontalLines.moveTo(0, height - ((float) height - 2f * dpToPixel(pointVerticalMargin)) / (float) (maxValue - minValue) * (float) (0 - minValue) - dpToPixel(pointVerticalMargin) - dpToPixel(boardLineWidth) / 2f);
+        boardHorizontalLines.lineTo(width, height - ((float) height - 2f * dpToPixel(pointVerticalMargin)) / (float) (maxValue - minValue) * (float) (0 - minValue) - dpToPixel(pointVerticalMargin) - dpToPixel(boardLineWidth) / 2f);
+        boardHorizontalLines.lineTo(width, height - ((float) height - 2f * dpToPixel(pointVerticalMargin)) / (float) (maxValue - minValue) * (float) (0 - minValue) - dpToPixel(pointVerticalMargin) + dpToPixel(boardLineWidth) / 2f);
+        boardHorizontalLines.lineTo(0, height - ((float) height - 2f * dpToPixel(pointVerticalMargin)) / (float) (maxValue - minValue) * (float) (0 - minValue) - dpToPixel(pointVerticalMargin) + dpToPixel(boardLineWidth) / 2f);
         boardHorizontalLines.close();
 
         Path valuePoints = new Path();
-        for (int index = 0; index < boardVerticalLineCount; index ++) {
+        for (int index = 0; index < boardVerticalLineCount; index++) {
             valuePoints.addCircle((float) width / (float) (boardVerticalLineCount + 1) * (float) (index + 1),
                     height - ((float) height - 2f * dpToPixel(pointVerticalMargin)) / (float) (maxValue - minValue) * (float) (values.get(index) - minValue) - dpToPixel(pointVerticalMargin),
                     dpToPixel(pointRadius),
@@ -149,30 +151,28 @@ public class Chart extends View {
         }
 
         /* draw something */
-        canvas.save();
-
-        canvas.translate(delta.x, delta.y);
-
         Path visibleArea = new Path();
         visibleArea.addRect(0, 0, width, height, Path.Direction.CW);
 
         scalePath(boardBoder);
-//        boardBoder.op(visibleArea, Path.Op.INTERSECT);
+        translatePath(boardBoder);
+        boardBoder.op(visibleArea, Path.Op.INTERSECT);
         canvas.drawPath(boardBoder, boardStrokePaint);
 
         scalePath(boardVerticalLines);
-//        boardVerticalLines.op(visibleArea, Path.Op.INTERSECT);
+        translatePath(boardVerticalLines);
+        boardVerticalLines.op(visibleArea, Path.Op.INTERSECT);
         canvas.drawPath(boardVerticalLines, boardLinePaint);
 
         scalePath(boardHorizontalLines);
-//        boardHorizontalLines.op(visibleArea, Path.Op.INTERSECT);
+        translatePath(boardHorizontalLines);
+        boardHorizontalLines.op(visibleArea, Path.Op.INTERSECT);
         canvas.drawPath(boardHorizontalLines, boardLinePaint);
 
         scalePath(valuePoints);
-//        valuePoints.op(visibleArea, Path.Op.INTERSECT);
+        translatePath(valuePoints);
+        valuePoints.op(visibleArea, Path.Op.INTERSECT);
         canvas.drawPath(valuePoints, pointPaint);
-
-        canvas.restore();
     }
 
     @Override
@@ -204,15 +204,27 @@ public class Chart extends View {
         path.transform(scaleMatrix);
     }
 
+    private void translatePath(Path path) {
+        translatePath(path, delta.x, delta.y);
+    }
+
+    private void translatePath(Path path, float deltaX, float deltaY) {
+        Matrix scaleMatrix = new Matrix();
+        scaleMatrix.setTranslate(deltaX, deltaY);
+        path.transform(scaleMatrix);
+    }
+
     private void setState(State state) {
         this.state = state;
     }
 
     private PointF downPosition = null;
-    private PointF previousDelta= null;
+    private PointF previousDelta = null;
+
     private class ChartOnTouchListener implements OnTouchListener {
         @Override
         public boolean onTouch(View view, MotionEvent motionEvent) {
+            gestureDetector.onTouchEvent(motionEvent);
             scaleGestureDetector.onTouchEvent(motionEvent);
 
             if (state == State.NONE || state == State.DRAG || state == State.FLING) {
@@ -239,6 +251,14 @@ public class Chart extends View {
 
             invalidate();
             return true;
+        }
+    }
+
+    private class GestureListener extends GestureDetector.SimpleOnGestureListener {
+        @Override
+        public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+            L.d();
+            return super.onFling(e1, e2, velocityX, velocityY);
         }
     }
 
